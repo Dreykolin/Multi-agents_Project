@@ -13,8 +13,8 @@ turtles-own [
 
 to setup
   clear-all
-  set floor-size 30    ;; ancho total del piso
-  set grid-size 1      ;; tamaño de cada celda (1 patch = 1 celda)
+  set floor-size 30
+  set grid-size 1
   set num-agents 100
 
   ;; ----- CREAR EL PISO -----
@@ -32,7 +32,7 @@ to setup
   ask selected-cells [
     sprout 1 [
       set shape "circle"
-      set size 1
+      set size 0.9
       set color one-of [blue yellow]
       set zcor 1
     ]
@@ -42,13 +42,13 @@ to setup
 end
 
 to go
-  ;; Ejemplo simple: moverse al azar pero sin compartir celda
   ask turtles [
-    let options neighbors4 with [not any? turtles-here]
+    let options (neighbors2d pxcor pycor pzcor) with [not any? turtles-here]
     if any? options [
       move-to one-of options
     ]
   ]
+  tick
   tick
 end
 
@@ -59,6 +59,15 @@ to draw-grid
       [ set pcolor gray + 1 ]
       [ set pcolor gray + 3 ]
     ]
+  ]
+end
+
+to-report neighbors2d [x y z]
+  report patches with [
+    abs (pxcor - x) <= 1 and
+    abs (pycor - y) <= 1 and
+    not (pxcor = x and pycor = y) and
+    pzcor = z
   ]
 end
 
