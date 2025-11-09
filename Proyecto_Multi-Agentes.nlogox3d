@@ -3,7 +3,7 @@
   <code><![CDATA[globals [
   floor-size
   grid-size
-  num-agents
+  num-agents ;Estas cosas hay que pasarlos a sliders en "Ejecutar"
   cells
 ]
 
@@ -15,7 +15,7 @@ to setup
   clear-all
   set floor-size 30
   set grid-size 1
-  set num-agents 100
+  set num-agents 100 ;si se hace el slider, se eliminan estos set
 
   ;; ----- CREAR EL PISO -----
   draw-grid
@@ -32,8 +32,8 @@ to setup
   ask selected-cells [
     sprout 1 [
       set shape "circle"
-      set size 0.9
-      set color one-of [blue yellow]
+      set size 1 
+      set color one-of [blue yellow green red black brown]
       set zcor 1
     ]
   ]
@@ -41,6 +41,7 @@ to setup
   reset-ticks
 end
 
+;movimiento random, simplemente verifica que si no hay otras tortugas en una de las 8 posiciones, la tortuga puede ir a ese sitio
 to go
   ask turtles [
     let options (neighbors2d pxcor pycor pzcor) with [not any? turtles-here]
@@ -52,6 +53,8 @@ to go
   tick
 end
 
+
+;La grilla es dibujada para mejor visualización
 to draw-grid
   ask patches [
     if (abs pxcor <= floor-size / 2) and (abs pycor <= floor-size / 2) and (pzcor = 0) [
@@ -62,6 +65,9 @@ to draw-grid
   ]
 end
 
+
+
+;VECINDAD DE MOORE 2D (8 DIRECCIONES)
 to-report neighbors2d [x y z]
   report patches with [
     abs (pxcor - x) <= 1 and
