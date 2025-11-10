@@ -1,38 +1,54 @@
 <?xml version="1.0" encoding="utf-8"?>
 <model version="NetLogo 3D 7.0.0" snapToGrid="true">
-  <code><![CDATA[globals [
+  <code><![CDATA[;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; CONFIGURACIÓN GLOBAL
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+globals [
   floor-size
   grid-size
-  num-agents ;Estas cosas hay que pasarlos a sliders en "Ejecutar"
+  num-agents
   cells
+  exit-patch        ;; referencia a la salida
 ]
 
 turtles-own [
   goal
 ]
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; SETUP DEL MUNDO
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 to setup
   clear-all
   set floor-size 30
   set grid-size 1
-  set num-agents 100 ;si se hace el slider, se eliminan estos set
+  set num-agents 100
 
   ;; ----- CREAR EL PISO -----
   draw-grid
 
-  ;; ----- OBTENER CELDAS DISPONIBLES -----
+  ;; ----- DEFINIR CELDAS DISPONIBLES -----
   set cells patches with [
     abs pxcor <= floor-size / 2 and
     abs pycor <= floor-size / 2 and
     pzcor = 0
   ]
 
-  ;; ----- CREAR AGENTES, UNO POR CELDA -----
+  ;; ----- DEFINIR SALIDA -----
+  ;; Por ejemplo, en el borde derecho del piso
+  set exit-patch one-of patches with [
+    pxcor = floor-size / 2 and pycor = 0 and pzcor = 0
+  ]
+  ask exit-patch [ set pcolor red ]
+
+  ;; ----- CREAR AGENTES -----
   let selected-cells n-of num-agents cells
   ask selected-cells [
     sprout 1 [
       set shape "circle"
-      set size 1 
+      set size 0.9
       set color one-of [blue yellow green red black brown]
       set zcor 1
     ]
@@ -41,33 +57,42 @@ to setup
   reset-ticks
 end
 
-;movimiento random, simplemente verifica que si no hay otras tortugas en una de las 8 posiciones, la tortuga puede ir a ese sitio
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; CICLO PRINCIPAL
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 to go
   ask turtles [
+    ;; obtener vecinos libres
     let options (neighbors2d pxcor pycor pzcor) with [not any? turtles-here]
+
     if any? options [
-      move-to one-of options
+      ;; elegir el patch libre más cercano a la salida
+      let target min-one-of options [distance exit-patch]
+      move-to target
     ]
   ]
   tick
-  tick
 end
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; FUNCIÓN PARA DIBUJAR LA GRILLA
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;La grilla es dibujada para mejor visualización
 to draw-grid
   ask patches [
     if (abs pxcor <= floor-size / 2) and (abs pycor <= floor-size / 2) and (pzcor = 0) [
       ifelse ((pxcor + pycor) mod 2 = 0)
-      [ set pcolor gray + 1 ]
-      [ set pcolor gray + 3 ]
+        [ set pcolor gray + 1 ]
+        [ set pcolor gray + 3 ]
     ]
   ]
 end
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; VECINDAD DE MOORE 2D (8 DIRECCIONES)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-
-;VECINDAD DE MOORE 2D (8 DIRECCIONES)
 to-report neighbors2d [x y z]
   report patches with [
     abs (pxcor - x) <= 1 and
@@ -77,9 +102,11 @@ to-report neighbors2d [x y z]
   ]
 end
 
+
+
 ]]></code>
   <widgets>
-    <view3d wrappingAllowedZ="true" x="0" wrappingAllowedX="true" y="0" minPycor="-16" height="434" showTickCounter="true" patchSize="12.0" fontSize="10" wrappingAllowedY="true" width="434" tickCounterLabel="ticks" maxPycor="16" updateMode="0" frameRate="30.0" maxPzcor="16" maxPxcor="16" minPxcor="-16" minPzcor="-16"></view3d>
+    <view3d wrappingAllowedZ="true" x="0" wrappingAllowedX="true" y="0" minPycor="-16" height="434" showTickCounter="true" patchSize="12.0" fontSize="10" wrappingAllowedY="true" width="434" tickCounterLabel="ticks" maxPycor="16" updateMode="0" frameRate="60.0" maxPzcor="16" maxPxcor="16" minPxcor="-16" minPzcor="-16"></view3d>
     <button x="20" y="25" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="55">setup
 </button>
     <button x="95" y="190" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="55">go</button>
