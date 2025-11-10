@@ -13,7 +13,10 @@ globals [
 ]
 
 turtles-own [
-  goal
+  category    ;; "child", "adult", "elderly"
+  speed       ;; ticks entre pasos
+  next-move   ;; tick en que puede moverse
+  focus       ;; precisión del movimiento (0 = errático, 1 = preciso)
 ]
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -26,21 +29,20 @@ to setup
   set grid-size 1
   set num-agents 100
 
-  ;; ----- CREAR EL PISO -----
+  ;; ----- CREAR EL PISO Y PAREDES -----
   draw-grid
-  draw-walls   ;; <--- añade esta línea
+  draw-walls
+
 
   ;; ----- DEFINIR CELDAS DISPONIBLES -----
-  ;; Aquí es donde agregamos el filtro para evitar las paredes
   set cells patches with [
     abs pxcor < (floor-size / 2) and
     abs pycor < (floor-size / 2) and
     pzcor = 0 and
-    pcolor != gray - 3     ;; <--- ESTA LÍNEA es la que evita spawnear en muros
+    pcolor != gray - 3
   ]
 
   ;; ----- DEFINIR SALIDA -----
-  ;; Por ejemplo, en el borde derecho del piso
   set exit-patch one-of patches with [
     pxcor = 15 and pycor = 0 and pzcor = 0
   ]
@@ -51,25 +53,53 @@ to setup
   ask selected-cells [
     sprout 1 [
       set shape "circle"
-      set size 0.9
-      set color one-of [blue yellow green red black brown]
       set zcor 1
     ]
   ]
-
   reset-ticks
+  ;; ----- ASIGNAR CATEGORÍAS -----
+  ask turtles [
+    let r random-float 1
+    if r < 0.2 [ ;; 20% niños
+      set color yellow
+      set size 0.7
+      set category "child"
+      set speed 1
+      set focus 0.6
+    ]
+    if r >= 0.2 and r < 0.8 [ ;; 60% adultos
+      set color blue
+      set size 0.9
+      set category "adult"
+      set speed 1
+      set focus 1.0
+    ]
+    if r >= 0.8 [ ;; 20% ancianos
+      set color green
+      set size 0.8
+      set category "elderly"
+      set speed 2
+      set focus 0.8
+    ]
+    set next-move ticks + ceiling speed
+
+  ]
+
+
 end
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; CICLO PRINCIPAL
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 to go
   let ex [pxcor] of exit-patch
   let ey [pycor] of exit-patch
 
   ask turtles [
-    ;; vecinos válidos: sin pared, sin tortugas, dentro de límites
+  if ticks >= next-move [
+    set ex [pxcor] of exit-patch
+    set ey [pycor] of exit-patch
+
     let options (neighbors2d pxcor pycor pzcor) with [
       pcolor != gray - 3 and
       not any? turtles-here and
@@ -78,22 +108,27 @@ to go
     ]
 
     if any? options [
-      ;; buscar el vecino más cercano a la puerta
-      let target min-one-of options [ euclid2d pxcor pycor ex ey ]
+      ;; la precisión afecta cuán certero es hacia la puerta
+      let f focus
+let target min-one-of options [
+  euclid2d pxcor pycor ex ey + ((1 - f) * random-float 5)
+]
 
-      ;; moverse solo si el patch sigue siendo válido y no es muro
       if target != nobody and [pcolor] of target != gray - 3 [
         move-to target
       ]
     ]
+
+    set next-move ticks + speed  ;; programa el próximo paso
   ]
+]
+
 
   ;; eliminar tortugas que alcanzan la puerta
   ask turtles with [patch-here = exit-patch] [ die ]
 
   tick
 end
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; FUNCIÓN PARA DIBUJAR LA GRILLA
@@ -122,6 +157,8 @@ to draw-walls
   ]
 end
 
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; VECINDAD DE MOORE 2D (8 DIRECCIONES)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -139,6 +176,8 @@ end
 to-report euclid2d [x1 y1 x2 y2]
   report sqrt ( (x1 - x2) ^ 2 + (y1 - y2) ^ 2 )
 end
+
+
 
 
 
