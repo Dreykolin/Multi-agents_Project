@@ -28,18 +28,21 @@ to setup
 
   ;; ----- CREAR EL PISO -----
   draw-grid
+  draw-walls   ;; <--- añade esta línea
 
   ;; ----- DEFINIR CELDAS DISPONIBLES -----
+  ;; Aquí es donde agregamos el filtro para evitar las paredes
   set cells patches with [
-    abs pxcor <= floor-size / 2 and
-    abs pycor <= floor-size / 2 and
-    pzcor = 0
+    abs pxcor < (floor-size / 2) and
+    abs pycor < (floor-size / 2) and
+    pzcor = 0 and
+    pcolor != gray - 3     ;; <--- ESTA LÍNEA es la que evita spawnear en muros
   ]
 
   ;; ----- DEFINIR SALIDA -----
   ;; Por ejemplo, en el borde derecho del piso
   set exit-patch one-of patches with [
-    pxcor = floor-size / 2 and pycor = 0 and pzcor = 0
+    pxcor = 15 and pycor = 0 and pzcor = 0
   ]
   ask exit-patch [ set pcolor red ]
 
@@ -62,18 +65,35 @@ end
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 to go
+  let ex [pxcor] of exit-patch
+  let ey [pycor] of exit-patch
+
   ask turtles [
-    ;; obtener vecinos libres
-    let options (neighbors2d pxcor pycor pzcor) with [not any? turtles-here]
+    ;; vecinos válidos: sin pared, sin tortugas, dentro de límites
+    let options (neighbors2d pxcor pycor pzcor) with [
+      pcolor != gray - 3 and
+      not any? turtles-here and
+      abs pxcor < (floor-size / 2) and
+      abs pycor < (floor-size / 2)
+    ]
 
     if any? options [
-      ;; elegir el patch libre más cercano a la salida
-      let target min-one-of options [distance exit-patch]
-      move-to target
+      ;; buscar el vecino más cercano a la puerta
+      let target min-one-of options [ euclid2d pxcor pycor ex ey ]
+
+      ;; moverse solo si el patch sigue siendo válido y no es muro
+      if target != nobody and [pcolor] of target != gray - 3 [
+        move-to target
+      ]
     ]
   ]
+
+  ;; eliminar tortugas que alcanzan la puerta
+  ask turtles with [patch-here = exit-patch] [ die ]
+
   tick
 end
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; FUNCIÓN PARA DIBUJAR LA GRILLA
@@ -89,6 +109,19 @@ to draw-grid
   ]
 end
 
+;; PAREDES (solo dibuja el marco del recinto en z = 0)
+to draw-walls
+  let xedge floor-size / 2
+  let yedge floor-size / 2
+  ask patches with [
+    pzcor = 0 and
+    ( (abs pxcor = xedge and abs pycor <= yedge) or   ;; paredes izquierda/derecha
+      (abs pycor = yedge and abs pxcor <= xedge) )    ;; paredes arriba/abajo
+  ] [
+    set pcolor gray - 3
+  ]
+end
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; VECINDAD DE MOORE 2D (8 DIRECCIONES)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -100,6 +133,11 @@ to-report neighbors2d [x y z]
     not (pxcor = x and pycor = y) and
     pzcor = z
   ]
+end
+
+
+to-report euclid2d [x1 y1 x2 y2]
+  report sqrt ( (x1 - x2) ^ 2 + (y1 - y2) ^ 2 )
 end
 
 
