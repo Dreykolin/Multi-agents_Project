@@ -63,19 +63,31 @@ to setup
 
   ask senales [ ask patches in-radius 2 [ set pcolor 9.9 ] ]
   
-  create-pibes 40 [
-    setxy (random-xcor * 0.8) (random-ycor * 0.8)
-    while [pcolor = blue] [ setxy (random-xcor * 0.8) (random-ycor * 0.8) ]
-    
-    set color white
-    set size 2
-    set heading random 360
-    set tiempo-enfoque 0
-    set objetivo-detectado nobody
-    set senal-detectada nobody
-    
-    set mi-vision 12
-    set mi-erraticidad 20
+  let num-pibes 40
+  
+  ;; Define el área libre en la habitación inferior
+  let parches-libres-abajo patches with [
+    pycor < -5 and 
+    pcolor != blue and pcolor != 9.9
+  ]
+  
+  if count parches-libres-abajo < num-pibes [
+    set num-pibes count parches-libres-abajo
+  ]
+  
+  ;; **Usamos sprout-pibes**
+  ask n-of num-pibes parches-libres-abajo [ 
+    sprout-pibes 1 [
+      set color white
+      set size 2
+      set heading random 360
+      set tiempo-enfoque 0
+      set objetivo-detectado nobody
+      set senal-detectada nobody
+      
+      set mi-vision 12
+      set mi-erraticidad 20
+    ]
   ]
   
   reset-ticks
@@ -185,17 +197,25 @@ to go
     if siguiente-patch != nobody [
       
       let muro-enfrente? ([pcolor] of siguiente-patch = blue)
+      let ocupado? (any? pibes-on siguiente-patch) ;; **NUEVA RESTRICCIÓN**
       
-      ifelse muro-enfrente? [
+      ifelse muro-enfrente? or ocupado? [ ;; Si hay muro O está ocupado
         
         rt 180 
         set tiempo-enfoque 0
-        let vecinos-libres patches in-radius 1 with [pcolor != blue]
+        
+        ;; En lugar de moverse, busca un vecino libre y desocupado
+        let vecinos-libres patches in-radius 1 with [
+          pcolor != blue and 
+          not any? pibes-here ;; El parche no debe tener ningún pibe
+        ]
+        
         if any? vecinos-libres [
           move-to one-of vecinos-libres
         ]
         
       ] [
+        ;; Si no hay muro Y no está ocupado, se mueve
         move-to siguiente-patch
       ]
     ]
@@ -203,14 +223,8 @@ to go
     ;; Lógica de colisión con objetivo
     if any? objetivos in-radius 0.5 [
       ask one-of objetivos in-radius 0.5 [
-        ;; ************************************
-        ;; SE ELIMINA LA TELETRANSPORTACIÓN DEL OBJETIVO
-        ;; ************************************
       ]
-      ;; ************************************
-      ;; SE AÑADE EL COMANDO DE MUERTE AQUÍ
       die
-      ;; ************************************
     ]
   ]
   tick
@@ -245,7 +259,7 @@ to lanzar-vision-realista
   ]
 end]]></code>
   <widgets>
-    <view x="241" wrappingAllowedX="false" y="10" frameRate="30.0" minPycor="-16" height="285" showTickCounter="true" patchSize="8.52" fontSize="10" wrappingAllowedY="false" width="557" tickCounterLabel="ticks" maxPycor="16" updateMode="0" maxPxcor="32" minPxcor="-32"></view>
+    <view x="241" wrappingAllowedX="false" y="10" frameRate="30.0" minPycor="-16" height="369" showTickCounter="true" patchSize="11.08" fontSize="10" wrappingAllowedY="false" width="724" tickCounterLabel="ticks" maxPycor="16" updateMode="0" maxPxcor="32" minPxcor="-32"></view>
     <button x="31" y="21" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="63">setup</button>
     <button x="35" y="81" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="63">go</button>
   </widgets>
