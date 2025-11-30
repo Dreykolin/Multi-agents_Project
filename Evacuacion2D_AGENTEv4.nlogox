@@ -62,11 +62,14 @@ to setup
 
   ask senales [ ask patches in-radius 2 [ set pcolor 9.9 ] ]
   
-  create-pibes 1 [
-    setxy 14 -14
+  ;; **Cambiado:** Creando 5 pibes en posiciones aleatorias
+  create-pibes 5 [
+    setxy (random-xcor * 0.8) (random-ycor * 0.8) ;; Posiciones aleatorias iniciales
+    while [pcolor = blue] [ setxy (random-xcor * 0.8) (random-ycor * 0.8) ]
+    
     set color white
     set size 2
-    set heading 0
+    set heading random 360
     set tiempo-enfoque 0
     set objetivo-detectado nobody
     set senal-detectada nobody
@@ -175,13 +178,16 @@ to go
   ]
   tick
 end
-
 to lanzar-vision-realista
-  let dibujar? (subject = self)
+  ;; **Cambiado:** Ahora la variable 'dibujar?' es TRUE solo si el agente (self) 
+  ;; es el que está siendo observado por la vista.
+  let dibujar? (subject = self) 
+  
   let resolucion 4
   let pasos-rayo 0.5
   let angulo-inicio -1 * (angulo-vision / 2)
   let angulo-fin (angulo-vision / 2)
+  
   foreach (range angulo-inicio angulo-fin resolucion) [ ang ->
     hatch-rayos 1 [
       set size 0 rt ang
@@ -190,7 +196,10 @@ to lanzar-vision-realista
         fd pasos-rayo
         set distancia-recorrida distancia-recorrida + pasos-rayo
         if pcolor = blue [ die ]
+        
+        ;; **Cambiado:** Solo colorea si la variable es TRUE
         if dibujar? [ set pcolor yellow - 3 ]
+        
         let posible-obj one-of objetivos-here
         if posible-obj != nobody [ ask myself [ set objetivo-detectado posible-obj ] ]
         let posible-senal one-of senales-here
@@ -200,7 +209,6 @@ to lanzar-vision-realista
     ]
   ]
 end
-
 
 
 ]]></code>
