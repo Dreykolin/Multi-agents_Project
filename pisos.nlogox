@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<model version="NetLogo 7.0.2" snapToGrid="false">
+<model version="NetLogo 7.0.0" snapToGrid="false">
   <code><![CDATA[extensions [ ls ]
 
 globals [
@@ -12,10 +12,10 @@ to setup
   ls:reset  ;; por si había modelos abiertos antes
 
   ;; Crear una instancia interactiva de cada piso
-  (ls:create-interactive-models 1 "piso1.nlogox"
+  (ls:create-interactive-models 1 "Piso_1.nlogox"
     [ [id] -> set piso1 id ])
 
-  (ls:create-interactive-models 1 "piso2.nlogox"
+  (ls:create-interactive-models 1 "Piso_2.nlogox"
     [ [id] -> set piso2 id ])
 
   ;; Llamar al setup de cada piso hijo

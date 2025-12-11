@@ -1,221 +1,671 @@
 <?xml version="1.0" encoding="utf-8"?>
 <model version="NetLogo 7.0.0" snapToGrid="false">
-  <code><![CDATA[globals [
+  <code><![CDATA[;; === MODELO V4: PISO 2 (ORIGEN / ARRIBA) ===
+;; Adaptado para LevelSpace: Los agentes que salen se guardan en un buffer
+;; para ser transferidos al Piso 1.
+
+globals [
   radio-vision
   angulo-vision
+  evacuados-total
+  tiempos-evacuacion
+  
+  evacuados-adultos
+  evacuados-kids
+  evacuados-abuelitos
+  panico-promedio
+  
+  ;; NUEVO PARA LEVELSPACE
+  buffer-salida
 ]
 
 breed [ pibes pibe ]
 breed [ objetivos objetivo ]
 breed [ rayos rayo ]
 breed [ senales senal ]
-senales-own [ target-asignado ]
+
+directed-link-breed [ influencias influencia ]
+
+senales-own [
+  destino-x
+  destino-y
+]
+
 pibes-own [
   objetivo-detectado
   senal-detectada
-  tiempo-enfoque
-  mi-vision
-  mi-erraticidad
+  pos-prev-x
+  pos-prev-y
+  velocidad-real
+  
+  patches-vistos
+  rastro-memoria
+  nivel-informacion
+  
+  tiene-meta?
+  meta-x
+  meta-y
+  memoria-paciencia
+  
+  tiempo-atascado
+  
+  tipo-persona
+  velocidad-base
+  nivel-panico
+  tiempo-evacuacion-personal
 ]
 
+;; =========================================================
+;; SETUP
+;; =========================================================
 to setup
   clear-all
-  set radio-vision 10
-  set angulo-vision 100
+  set radio-vision 3
+  set angulo-vision 180
+
+  set evacuados-total 0
+  set tiempos-evacuacion []
   
+  ;; Inicializar buffer de salida vacío
+  set buffer-salida []
+  
+  set evacuados-adultos 0
+  set evacuados-kids 0
+  set evacuados-abuelitos 0
+  set panico-promedio 0
+
   construir-edificio
+  colocar-senales-estrategicas
+  
+  let parches-libres patches with [pycor < 10 and pcolor = black]
+  let total-personas num-personas
+  if count parches-libres < total-personas [ set total-personas count parches-libres ]
 
-  let el-objetivo nobody
+  ;; Calcular cantidad por tipo según porcentajes
+  let cant-adultos floor (total-personas * porcentaje-adultos / 100)
+  let cant-kids floor (total-personas * porcentaje-kids / 100)
+  let cant-abuelitos total-personas - cant-adultos - cant-kids
+
+  ;; Crear adultos
+  let parches-para-adultos n-of cant-adultos parches-libres
+  ask parches-para-adultos [
+    sprout-pibes 1 [ configurar-adulto ]
+  ]
+
+  ;; Crear kids (en parches sin pibes)
+  let parches-disponibles-1 parches-libres with [not any? pibes-here]
+  let parches-para-kids n-of (min list cant-kids count parches-disponibles-1) parches-disponibles-1
+  ask parches-para-kids [
+    sprout-pibes 1 [ configurar-kid ]
+  ]
+
+  ;; Crear abuelitos (en parches sin pibes)
+  let parches-disponibles-2 parches-libres with [not any? pibes-here]
+  let parches-para-abuelitos n-of (min list cant-abuelitos count parches-disponibles-2) parches-disponibles-2
+  ask parches-para-abuelitos [
+    sprout-pibes 1 [ configurar-abuelito ]
+  ]
+
   create-objetivos 1 [
-    set shape "circle" set color red set size 2
-    setxy -14 14
-    set el-objetivo self
-  ]
-  
-  let senal-3 nobody
-  create-senales 1 [
-    set shape "arrow" set color yellow set size 1.5
-    setxy -12 5
-    set label "3"
-    set target-asignado el-objetivo
-    face target-asignado
-    set senal-3 self
-  ]
-  
-  let senal-2 nobody
-  create-senales 1 [
-    set shape "arrow" set color yellow set size 1.5
-    setxy -6 -2
-    set label "2"
-    set target-asignado senal-3
-    face target-asignado
-    set senal-2 self
-  ]
-  
-  create-senales 1 [
-    set shape "arrow" set color yellow set size 1.5
-    setxy 10 -10
-    set label "1"
-    set target-asignado senal-2
-    face target-asignado
+    set shape "circle" set color red set size 2 setxy 0 14
   ]
 
-  ask senales [ ask patches in-radius 2 [ set pcolor 9.9 ] ]
-  
-  ;; **Cambiado:** Creando 5 pibes en posiciones aleatorias
-  create-pibes 5 [
-    setxy (random-xcor * 0.8) (random-ycor * 0.8) ;; Posiciones aleatorias iniciales
-    while [pcolor = blue] [ setxy (random-xcor * 0.8) (random-ycor * 0.8) ]
-    
-    set color white
-    set size 2
-    set heading random 360
-    set tiempo-enfoque 0
-    set objetivo-detectado nobody
-    set senal-detectada nobody
-    
-    set mi-vision 12
-    set mi-erraticidad 20
-  ]
-  
   reset-ticks
 end
-
-to construir-edificio
-  ask patches with [
-    pxcor = min-pxcor or pxcor = max-pxcor or
-    pycor = min-pycor or pycor = max-pycor
-  ] [ set pcolor blue ]
-  
-  ask patches with [pycor = 5] [ set pcolor blue ]
-  
-  ask patches with [pxcor = -5 and pycor < 5] [ set pcolor blue ]
-  
-  ask patches with [pxcor > 5 and pxcor < 10 and pycor = 5] [ set pcolor black ]
-  
-  ask patches with [pxcor = -5 and pycor > -5 and pycor < 0] [ set pcolor black ]
-  
-  ask patches with [pxcor > -15 and pxcor < -10 and pycor = 5] [ set pcolor black ]
-  
-  ask patches with [pxcor = 8 and pycor = -5] [ set pcolor blue ]
-  ask patches with [pxcor = -10 and pycor = 0] [ set pcolor blue ]
-end
+;; =========================================================
+;; LOOP PRINCIPAL
+;; =========================================================
 
 to go
-  ask patches with [pcolor != blue and pcolor != 9.9] [ set pcolor black ]
+  ask patches with [pcolor != blue] [ set pcolor black ]
+  ask influencias [ die ]
 
+  actualizar-panico-global
+  
+  
   ask pibes [
+   ;; ACTUALIZAR TIEMPO Y PÁNICO PERSONAL
+    set tiempo-evacuacion-personal tiempo-evacuacion-personal + 1
+    actualizar-mi-panico
+    actualizar-color-panico
+   
+    ;; === SALIDA INMEDIATA (MODIFICADO PARA PISO 2) ===
+    if any? objetivos in-radius 1.5 [
+      ;; 1. Registrar estadísticas locales (opcional, pero útil para ver qué pasa arriba)
+      set evacuados-total evacuados-total + 1
+      set tiempos-evacuacion lput ticks tiempos-evacuacion
+      if tipo-persona = "adulto" [ set evacuados-adultos evacuados-adultos + 1 ]
+      if tipo-persona = "kid" [ set evacuados-kids evacuados-kids + 1 ]
+      if tipo-persona = "abuelito" [ set evacuados-abuelitos evacuados-abuelitos + 1 ]
+      
+      ;; 2. EMPAQUETAR DATOS PARA EL MASTER
+      ;; Orden: [tipo-persona, nivel-panico, color, velocidad-base]
+      let mis-datos (list tipo-persona nivel-panico color velocidad-base)
+      
+      ;; 3. Añadir a la lista de transferencia
+      set buffer-salida lput mis-datos buffer-salida
+      
+      ;; 4. Desaparecer de este piso
+      die 
+    ]
+    
+    ;; 1. ESTADO FÍSICO Y FRUSTRACIÓN
+    set velocidad-real distancexy pos-prev-x pos-prev-y
+    set pos-prev-x xcor
+    set pos-prev-y ycor
+    
+    ifelse tiene-meta? and velocidad-real < 0.05 [
+      set tiempo-atascado tiempo-atascado + 1
+    ] [ set tiempo-atascado 0 ]
+    
+    if tiempo-atascado > 15 [
+      set tiene-meta? false      
+      set nivel-informacion 0    
+      set memoria-paciencia 0
+      set nivel-panico nivel-panico + 5  ;; Frustración aumenta pánico
+      set color white            
+    ]
+
+    ;; Decaimiento suave de información
+    if nivel-informacion > 0 [
+      set nivel-informacion nivel-informacion - 5 
+      if nivel-informacion < 0 [ set nivel-informacion 0 ]
+    ]
+
+    if memoria-paciencia > 0 [ set memoria-paciencia memoria-paciencia - 1 ]
+    if memoria-paciencia = 0 [ 
+      set tiene-meta? false 
+      set nivel-informacion 0
+    ]
+    
+    ;; 2. VISIÓN
     set objetivo-detectado nobody
     set senal-detectada nobody
-    
     lanzar-vision-realista
+
+    let siguiente-patch nobody
     
-    ifelse (objetivo-detectado != nobody) [
+    ;; LLEGADA A META INTERMEDIA
+    if tiene-meta? and distancexy meta-x meta-y < 1.5 [
+      set tiene-meta? false
+      if nivel-informacion < 500 [ set nivel-informacion 0 ]
+    ]
+
+    ;; === FASE 1: INFORMACIÓN DIRECTA ===
+    
+    ;; A. Ver la Salida
+    if objetivo-detectado != nobody [
+      set nivel-informacion 1000
+      set tiene-meta? true
+      set meta-x [xcor] of objetivo-detectado
+      set meta-y [ycor] of objetivo-detectado
       face objetivo-detectado
+      set siguiente-patch patch-ahead 1
       set color green
-      set tiempo-enfoque 0
-    ] [
-      ifelse (senal-detectada != nobody) [
+      set memoria-paciencia 100
+    ]
+
+    ;; B. Ver Señalética
+    if siguiente-patch = nobody and senal-detectada != nobody [
+      if distancexy ([destino-x] of senal-detectada) ([destino-y] of senal-detectada) > 2 [
+        set nivel-informacion 500
+        set tiene-meta? true
+        set meta-x [destino-x] of senal-detectada
+        set meta-y [destino-y] of senal-detectada
         
-        let radio-fuerza 2.0
-        let dist distance senal-detectada
-        let angulo-flecha [heading] of senal-detectada
-        let mi-diferencia abs (subtract-headings heading angulo-flecha)
+        if distancexy meta-x meta-y > 0.1 [ facexy meta-x meta-y ]
         
-        ifelse mi-diferencia > 120 [
-          let dif-giro subtract-headings angulo-flecha heading
-          rt (dif-giro * 0.8)
-          set color red
-          set tiempo-enfoque 30
-        ] [
-          ifelse dist < radio-fuerza [
-            let diferencia subtract-headings angulo-flecha heading
-            rt (diferencia * 0.8)
-            rt random 6 - 3
-            set color magenta
-            set tiempo-enfoque 40
-          ] [
-            let angulo-hacia-senal towards senal-detectada
-            let diferencia subtract-headings angulo-hacia-senal heading
-            let factor (1 - (dist / radio-vision))
-            if factor < 0 [ set factor 0 ]
-            set factor sqrt factor
-            rt (diferencia * factor * 0.5)
-            set color orange
-          ]
-        ]
+        set siguiente-patch patch-ahead 1
+        set color yellow
+        set memoria-paciencia 100
+      ]
+    ]
+
+    ;; === FASE 2: LIDERAZGO SOCIAL CONTEXTUAL ===
+    if siguiente-patch = nobody [
+      
+      ;; AJUSTADO: Radio social reducido a 4 para evitar "telepatía" a distancia
+      let candidatos other pibes in-radius 4 with [
+        velocidad-real > 0.1 and 
+        member? patch-here [patches-vistos] of myself
+      ]
+      
+      if any? candidatos [
+        let lideres-informados candidatos with [nivel-informacion > 0]
         
-      ] [
-        ifelse tiempo-enfoque > 0 [
-          rt random 4 - 2
-          set tiempo-enfoque tiempo-enfoque - 1
-          set color orange + 2
-        ] [
-          rt random 40 - 20
-          set color white
+        ifelse any? lideres-informados [
+           ;; Buscar al mejor líder
+           let mejor-lider max-one-of lideres-informados [nivel-informacion]
+           
+           ;; Solo sigo si mejora mi situación
+           if mejor-lider != nobody and [nivel-informacion] of mejor-lider > (nivel-informacion + 10) [
+             
+             ;; ADOPTAR NIVEL
+             set nivel-informacion ([nivel-informacion] of mejor-lider - 1)
+             set memoria-paciencia 50
+             
+             ;; === LÓGICA DE WAYPOINT CONTEXTUAL ===
+             let meta-lider-x [meta-x] of mejor-lider
+             let meta-lider-y [meta-y] of mejor-lider
+             let mi-y ycor
+             let mi-x xcor
+             
+             ifelse (meta-lider-y > 10 and mi-y < -4) [
+               ;; Caso: Líder afuera, Yo adentro -> Busco puerta intermedia
+               set tiene-meta? true
+               ifelse mi-x < 0 [ set meta-x -5 set meta-y -5 ] [ set meta-x 5 set meta-y -5 ]
+               set color cyan - 2 
+             ] [
+               ;; Caso Normal: Copio meta
+               if [tiene-meta?] of mejor-lider [
+                 set tiene-meta? true
+                 set meta-x meta-lider-x
+                 set meta-y meta-lider-y
+               ]
+               create-influencia-to mejor-lider [ set color gray set thickness 0.1 ]
+               ifelse nivel-informacion > 500 [ set color cyan + 2 ] [ set color cyan ]
+             ]
+           ]
+        ] 
+        [
+           ;; Flocking de respaldo
+           let heading-promedio mean [heading] of candidatos
+           let dif subtract-headings heading-promedio heading
+           rt (dif * 0.5) 
+           set siguiente-patch patch-ahead 1
+           set color violet 
         ]
       ]
     ]
     
-    let velocidad 0.5
-    let muro-enfrente? ([pcolor] of patch-ahead (velocidad + 0.1) = blue)
-    
-    ifelse muro-enfrente? [
-      rt 180
-      set tiempo-enfoque 0
-    ] [
-      fd velocidad
-      if pcolor = blue [ bk velocidad rt 180 set tiempo-enfoque 0 ]
+    ;; === FASE 3: NAVEGACIÓN POR MEMORIA ===
+    if siguiente-patch = nobody and tiene-meta? [
+       if distancexy meta-x meta-y > 0.1 [
+         facexy meta-x meta-y
+         set siguiente-patch patch-ahead 1
+         set color orange
+       ]
+    ]
+
+    ;; === FASE 4: EXPLORACIÓN ===
+    if siguiente-patch = nobody [
+        let candidatos-vecinos neighbors with [pcolor != blue and not any? pibes-here]
+        let candidatos-nuevos candidatos-vecinos with [not member? self [rastro-memoria] of myself]
+        
+        ifelse any? candidatos-nuevos [
+          set siguiente-patch one-of candidatos-nuevos
+          face siguiente-patch
+          set color white
+        ] [
+          set rastro-memoria [] 
+          rt random 360         
+          if any? candidatos-vecinos [ set siguiente-patch one-of candidatos-vecinos face siguiente-patch ]
+          set color white
+        ]
+    ]
+
+    ;; === EJECUCIÓN ===
+    if siguiente-patch != nobody [
+      let es-visible? member? siguiente-patch patches-vistos
+      let es-muro? [pcolor] of siguiente-patch = blue
+      let esta-ocupado? any? pibes-on siguiente-patch
       
-      if any? objetivos in-radius 1.5 [
-        ask one-of objetivos in-radius 1.5 [
-          setxy random-xcor random-ycor
-          while [pcolor = blue] [ setxy random-xcor random-ycor ]
-          ask senales [ if target-asignado != nobody [ face target-asignado ] ]
+      ifelse (es-visible? and not es-muro? and not esta-ocupado?) [
+        move-to siguiente-patch
+        actualizar-rastro 
+      ] 
+      [
+        let alternativas neighbors with [
+          pcolor != blue and
+          not any? pibes-on self and
+          member? self [patches-vistos] of myself
+        ]
+        
+        ifelse any? alternativas [
+          let mi-objetivo-heading heading
+          if tiene-meta? and distancexy meta-x meta-y > 0.1 [ 
+             set mi-objetivo-heading towardsxy meta-x meta-y 
+          ]
+          let mejor-alternativa min-one-of alternativas [
+            abs subtract-headings (towards myself + 180) mi-objetivo-heading
+          ]
+          face mejor-alternativa
+          move-to mejor-alternativa
+          actualizar-rastro 
+        ] [
+          rt random 4 - 2 
+          set velocidad-real 0
+          set nivel-panico nivel-panico + 1  ;; Atascarse aumenta pánico
         ]
       ]
     ]
   ]
   tick
 end
+
+;; =========================================================
+;; AUXILIARES
+;; =========================================================
+
+to actualizar-rastro
+  set rastro-memoria lput patch-here rastro-memoria
+  if length rastro-memoria > 15 [ set rastro-memoria but-first rastro-memoria ]
+end
+
 to lanzar-vision-realista
-  ;; **Cambiado:** Ahora la variable 'dibujar?' es TRUE solo si el agente (self) 
-  ;; es el que está siendo observado por la vista.
-  let dibujar? (subject = self) 
+  set patches-vistos (patch-set patch-here)
+  let dibujar? (subject = self)
+  
+  ;; Visión reducida por pánico alto
+  let vision-efectiva radio-vision
+  if nivel-panico > 60 [
+    set vision-efectiva radio-vision * 0.7
+  ]
   
   let resolucion 4
-  let pasos-rayo 0.5
-  let angulo-inicio -1 * (angulo-vision / 2)
-  let angulo-fin (angulo-vision / 2)
-  
-  foreach (range angulo-inicio angulo-fin resolucion) [ ang ->
+  let pasos 0.5
+  let inicio (- angulo-vision / 2)
+  let fin (angulo-vision / 2)
+
+  foreach (range inicio fin resolucion) [ ang ->
     hatch-rayos 1 [
-      set size 0 rt ang
-      let distancia-recorrida 0
-      while [distancia-recorrida < radio-vision] [
-        fd pasos-rayo
-        set distancia-recorrida distancia-recorrida + pasos-rayo
+      set size 0
+      rt ang
+      let recorrido 0
+      while [recorrido < radio-vision] [
+        fd pasos
+        set recorrido recorrido + pasos
+        
         if pcolor = blue [ die ]
         
-        ;; **Cambiado:** Solo colorea si la variable es TRUE
-        if dibujar? [ set pcolor yellow - 3 ]
+        let p patch-here
+        if dibujar? [ ask p [ if pcolor = black [ set pcolor yellow - 4 ] ] ]
         
-        let posible-obj one-of objetivos-here
-        if posible-obj != nobody [ ask myself [ set objetivo-detectado posible-obj ] ]
-        let posible-senal one-of senales-here
-        if posible-senal != nobody [ ask myself [ set senal-detectada posible-senal ] ]
+        ask myself [ set patches-vistos (patch-set patches-vistos p) ]
+
+        if recorrido > 1.5 and any? other pibes-here [ die ]
+
+        let obj one-of objetivos-here
+        if obj != nobody [ ask myself [ set objetivo-detectado obj ] ]
+
+        let sen one-of senales-here
+        if sen != nobody [ ask myself [ set senal-detectada sen ] ]
       ]
       die
     ]
   ]
 end
 
+;; SISTEMA DE PÁNICO
+to actualizar-panico-global
+  ifelse any? pibes [
+    set panico-promedio mean [nivel-panico] of pibes
+  ] [
+    set panico-promedio 0
+  ]
+end
 
-]]></code>
+to actualizar-mi-panico
+  ;; === FACTORES QUE AUMENTAN EL PÁNICO ===
+  
+  ;; 1. Aglomeración (muchas personas cerca)
+  let vecinos-cerca count other pibes in-radius 3
+  if vecinos-cerca > 3 [
+    set nivel-panico nivel-panico + (vecinos-cerca - 3) * 0.5
+  ]
+  
+  ;; 2. Contagio emocional (ver a otros en pánico)
+  let vecinos-panico pibes in-radius 5 with [nivel-panico > 50]
+  if any? vecinos-panico [
+    set nivel-panico nivel-panico + count vecinos-panico * factor-contagio-panico
+  ]
+  
+  ;; 3. Tiempo sin encontrar salida
+  if ticks > 100 and objetivo-detectado = nobody [
+    set nivel-panico nivel-panico + 0.1
+  ]
+  
+  ;; 4. Chocar con paredes
+  if any? neighbors with [pcolor = blue] [
+    set nivel-panico nivel-panico + 0.3
+  ]
+  
+  ;; === FACTORES QUE REDUCEN EL PÁNICO ===
+  
+  ;; 1. Ver la salida
+  if objetivo-detectado != nobody [
+    set nivel-panico nivel-panico - 2
+  ]
+  
+  ;; 2. Ver una señal
+  if senal-detectada != nobody [
+    set nivel-panico nivel-panico - 0.5
+  ]
+  
+  ;; 3. Calma natural
+  set nivel-panico nivel-panico - 0.1
+  
+  ;; Mantener entre 0 y 100
+  if nivel-panico < 0 [ set nivel-panico 0 ]
+  if nivel-panico > 100 [ set nivel-panico 100 ]
+end
+
+to actualizar-color-panico
+  ;; Solo cambiar color si NO ve la salida (verde tiene prioridad)
+  if objetivo-detectado = nobody [
+    ;; Color base según tipo de persona
+    let base-color white
+    if tipo-persona = "kid" [ set base-color sky ]
+    if tipo-persona = "abuelito" [ set base-color gray ]
+    
+    ;; Cambiar color según nivel de pánico
+    ifelse nivel-panico > 70 [
+      set color red
+    ] [
+      ifelse nivel-panico > 40 [
+        set color orange
+      ] [
+        ifelse nivel-panico > 20 [
+          set color yellow
+        ] [
+          set color base-color
+        ]
+      ]
+    ]
+  ]
+end
+;; =========================================================
+;; ENTORNO
+;; =========================================================
+
+to colocar-senales-estrategicas
+  ;; === SALA IZQUIERDA ===
+ ; crear-senal -25 -14.5 90 -5 -5
+  crear-senal -6.5 -5 90 -5 -5
+  
+  ;; === SALA DERECHA ===
+;  crear-senal 25 -14.5 270 5 -5
+  crear-senal 6.5 -5 270 5 -5
+  
+  ;; === PASILLO CENTRAL ===
+  crear-senal 0 -2 0 0 13
+ ; crear-senal -4 1 45 0 13
+end
+
+
+
+to configurar-adulto
+  set tipo-persona "adulto"
+  set shape "person"
+  set size 1.2
+  set color white
+  set heading random 360
+  set objetivo-detectado nobody
+  set senal-detectada nobody
+  set pos-prev-x xcor
+  set pos-prev-y ycor
+  set velocidad-real 0
+  set velocidad-base 1.0
+  set nivel-informacion 0
+  set patches-vistos (patch-set patch-here)
+  set rastro-memoria []
+  set tiene-meta? false
+  set meta-x 0
+  set meta-y 0
+  set memoria-paciencia 0
+  set tiempo-atascado 0
+  set nivel-panico panico-inicial
+  set tiempo-evacuacion-personal 0
+end
+
+to configurar-kid
+  set tipo-persona "kid"
+  set shape "person"
+  set size 0.8
+  set color sky
+  set heading random 360
+  set objetivo-detectado nobody
+  set senal-detectada nobody
+  set pos-prev-x xcor
+  set pos-prev-y ycor
+  set velocidad-real 0
+  set velocidad-base 1.3
+  set nivel-informacion 0
+  set patches-vistos (patch-set patch-here)
+  set rastro-memoria []
+  set tiene-meta? false
+  set meta-x 0
+  set meta-y 0
+  set memoria-paciencia 0
+  set tiempo-atascado 0
+  set nivel-panico panico-inicial + 10
+  set tiempo-evacuacion-personal 0
+end
+
+to configurar-abuelito
+  set tipo-persona "abuelito"
+  set shape "person"
+  set size 1.2
+  set color gray
+  set heading random 360
+  set objetivo-detectado nobody
+  set senal-detectada nobody
+  set pos-prev-x xcor
+  set pos-prev-y ycor
+  set velocidad-real 0
+  set velocidad-base 0.5
+  set nivel-informacion 0
+  set patches-vistos (patch-set patch-here)
+  set rastro-memoria []
+  set tiene-meta? false
+  set meta-x 0
+  set meta-y 0
+  set memoria-paciencia 0
+  set tiempo-atascado 0
+  set nivel-panico panico-inicial
+  set tiempo-evacuacion-personal 0
+end
+
+;; REPORTES PARA MONITORES
+;; =========================================================
+
+to-report personas-restantes
+  report count pibes
+end
+
+to-report porcentaje-evacuado
+  ifelse num-personas > 0 [
+    report (evacuados-total / num-personas) * 100
+  ] [
+    report 0
+  ]
+end
+
+to-report tiempo-promedio-evacuacion
+  ifelse length tiempos-evacuacion > 0 [
+    report mean tiempos-evacuacion
+  ] [
+    report 0
+  ]
+end
+
+to-report adultos-restantes
+  report count pibes with [tipo-persona = "adulto"]
+end
+
+to-report kids-restantes
+  report count pibes with [tipo-persona = "kid"]
+end
+
+to-report abuelitos-restantes
+  report count pibes with [tipo-persona = "abuelito"]
+end
+
+;; =========================================================
+;; ENTORNO
+;; =========================================================
+
+
+to crear-senal [x y angulo dest-x dest-y]
+  create-senales 1 [
+    setxy x y
+    set shape "arrow"
+    set color yellow
+    set size 2
+    set heading angulo
+    set destino-x dest-x
+    set destino-y dest-y
+  ]
+end
+
+to construir-edificio
+  ask patches [ set pcolor black ]
+  ask patches with [pxcor = min-pxcor or pxcor = max-pxcor or pycor = min-pycor or pycor = max-pycor] [ set pcolor blue ]
+  ask patches with [pycor = 13] [ set pcolor blue ]
+  ask patches with [pxcor = -5 and pycor < 13] [ set pcolor blue ]
+  ask patches with [pxcor = 5 and pycor < 13] [ set pcolor blue ]
+  ask patch -5 -5 [ set pcolor black ]
+  ask patch 5 -5 [ set pcolor black ]
+  ask patch 0 13 [ set pcolor black ]
+end
+
+;; === REPORTER PARA TRANSFERIR AL MASTER ===
+to-report evacuar-por-escalera
+  let salida buffer-salida
+  set buffer-salida []  ;; Limpiar buffer para no repetir
+  report salida
+end]]></code>
   <widgets>
-    <view x="241" wrappingAllowedX="false" y="10" frameRate="30.0" minPycor="-16" height="433" showTickCounter="true" patchSize="13.0" fontSize="10" wrappingAllowedY="false" width="849" tickCounterLabel="ticks" maxPycor="16" updateMode="0" maxPxcor="32" minPxcor="-32"></view>
-    <button x="31" y="21" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="63">setup</button>
-    <button x="35" y="81" height="40" disableUntilTicks="false" forever="true" kind="Observer" width="63">go</button>
+    <view x="303" wrappingAllowedX="false" y="18" frameRate="30.0" minPycor="-16" height="374" showTickCounter="true" patchSize="11.212121212121213" fontSize="10" wrappingAllowedY="false" width="732" tickCounterLabel="ticks" maxPycor="16" updateMode="0" maxPxcor="32" minPxcor="-32"></view>
+    <button x="14" y="58" height="35" disableUntilTicks="false" forever="true" kind="Observer" width="94">go</button>
+    <slider x="11" step="1" y="109" max="40" width="250" display="porcentaje-kids" height="50" min="0" direction="Horizontal" default="40.0" variable="porcentaje-kids"></slider>
+    <slider x="10" step="1" y="169" max="80" width="250" display="porcentaje-adultos" height="50" min="20" direction="Horizontal" default="51.0" variable="porcentaje-adultos"></slider>
+    <slider x="9" step="0.5" y="224" max="3" width="250" display="factor-contagio-panico" height="50" min="0" direction="Horizontal" default="3.0" variable="factor-contagio-panico"></slider>
+    <slider x="9" step="1" y="285" max="50" width="250" display="panico-inicial" height="50" min="0" direction="Horizontal" default="20.0" variable="panico-inicial"></slider>
+    <slider x="6" step="1" y="342" max="100" width="250" display="num-personas" height="50" min="10" direction="Horizontal" default="400.0" variable="num-personas"></slider>
+    <plot x="1251" autoPlotX="true" yMax="10.0" autoPlotY="true" y="6" xMin="0.0" height="175" legend="false" xMax="10.0" yMin="0.0" width="230" display="Promedio">
+      <setup></setup>
+      <update></update>
+      <pen interval="1.0" mode="0" display="default" color="-955883" legend="true">
+        <setup></setup>
+        <update>plot panico-promedio</update>
+      </pen>
+    </plot>
+    <plot x="1252" autoPlotX="true" yMax="10.0" autoPlotY="true" y="208" xMin="0.0" height="175" legend="false" xMax="10.0" yMin="0.0" width="230" display="Evacuados">
+      <setup></setup>
+      <update></update>
+      <pen interval="1.0" mode="0" display="default" color="-13840069" legend="true">
+        <setup></setup>
+        <update>plot evacuados-total</update>
+      </pen>
+    </plot>
+    <monitor x="1123" precision="17" y="7" height="60" fontSize="11" width="100">panico-promedio</monitor>
+    <monitor x="1123" precision="17" y="75" height="60" fontSize="11" width="100">tiempo-promedio-evacuacion</monitor>
+    <monitor x="1121" precision="17" y="147" height="60" fontSize="11" width="100">porcentaje-evacuado</monitor>
+    <monitor x="1122" precision="17" y="217" height="60" fontSize="11" width="100">personas-restantes</monitor>
+    <monitor x="1120" precision="17" y="286" height="60" fontSize="11" width="100">evacuados-total</monitor>
+    <monitor x="1120" precision="17" y="359" height="60" fontSize="11" width="100"><![CDATA[count pibes with [nivel-panico > 50]]]></monitor>
+    <button x="12" y="13" height="40" disableUntilTicks="false" forever="false" kind="Observer" width="95">setup</button>
   </widgets>
   <info>## WHAT IS IT?
 
