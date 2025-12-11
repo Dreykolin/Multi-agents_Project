@@ -114,16 +114,19 @@ to setup
   ]
 
   create-objetivos 1 [
-    set shape "circle" set color red set size 2 setxy 0 14
+    set shape "circle" set color red set size 2 setxy -31 -13.5
   ]
   
   ;; === AGREGADO LEVELSPACE: ESCALERA VERDE DE LLEGADA ===
   ;; Solo añadimos la ubicación de la escalera para que lleguen los del piso 2
-  set escalera-x -20
-  set escalera-y 15
-  ask patch escalera-x escalera-y [
-    set pcolor green
-  ]
+  set escalera-x 30
+set escalera-y 14.5
+
+; Le pedimos a TODOS los parches que verifiquen
+; su distancia hacia ese punto específico
+ask patches with [distancexy escalera-x escalera-y <= 1] [
+  set pcolor green
+]
   ;; ======================================================
 
   reset-ticks
@@ -532,14 +535,15 @@ end
 to colocar-senales-estrategicas
   ;; === SALA IZQUIERDA ===
  ; crear-senal -25 -14.5 90 -5 -5
-  crear-senal -6.5 -5 90 -5 -5
-  
+ crear-senal -8 -3 180 -8 -13
+   crear-senal 11 5 180 11 3
+ crear-senal -16 -14 270 -27 -14
   ;; === SALA DERECHA ===
 ;  crear-senal 25 -14.5 270 5 -5
-  crear-senal 6.5 -5 270 5 -5
+  crear-senal 8 -5 0 8 -3
   
   ;; === PASILLO CENTRAL ===
-  crear-senal 0 -2 0 0 13
+  crear-senal 0 -2 -90 -3 -2
  ; crear-senal -4 1 45 0 13
 end
 
@@ -667,14 +671,61 @@ to crear-senal [x y angulo dest-x dest-y]
 end
 
 to construir-edificio
+  ;; 1. Limpiar todo a negro (suelo)
   ask patches [ set pcolor black ]
-  ask patches with [pxcor = min-pxcor or pxcor = max-pxcor or pycor = min-pycor or pycor = max-pycor] [ set pcolor blue ]
-  ask patches with [pycor = 13] [ set pcolor blue ]
-  ask patches with [pxcor = -5 and pycor < 13] [ set pcolor blue ]
-  ask patches with [pxcor = 5 and pycor < 13] [ set pcolor blue ]
-  ask patch -5 -5 [ set pcolor black ]
-  ask patch 5 -5 [ set pcolor black ]
-  ask patch 0 13 [ set pcolor black ]
+
+  ;; 2. Muros Perimetrales (El borde del mundo)
+  ask patches with [pxcor = min-pxcor or pxcor = max-pxcor or pycor = min-pycor or pycor = max-pycor] [ 
+    set pcolor blue 
+  ]
+
+  ;; =========================================================
+  ;; ESTRUCTURA DE PASILLOS Y OFICINAS (Igual que antes)
+  ;; =========================================================
+  
+  ;; Muros Horizontales Principales
+  ask patches with [pycor = 4 or pycor = -4] [ set pcolor blue ]
+  
+  ;; Divisores verticales de oficinas
+  ask patches with [abs pxcor = 5 and abs pycor > 4] [ set pcolor blue ]
+  
+  ;; Muros del Hall de Escaleras (Arriba-Derecha)
+  ask patches with [pxcor = 10 and pycor > 4] [ set pcolor blue ]
+
+  ;; =========================================================
+  ;; PUERTAS Y OBSTÁCULOS INTERNOS
+  ;; =========================================================
+  ;; Puerta Hall Escalera
+  ask patch 11 4 [ set pcolor black ] 
+  
+  ;; Puertas Oficinas Norte
+  ask patch -8 4 [ set pcolor black ]
+  ask patch 0 4 [ set pcolor black ]
+  
+  ;; Puertas Oficinas Sur
+  ask patch -8 -4 [ set pcolor black ]
+  ask patch 0 -4 [ set pcolor black ]
+  ask patch 8 -4 [ set pcolor black ]
+
+  ;; Obstáculos del Pasillo Central
+  ask patch -2 0 [ set pcolor blue ]
+  ask patch 2 0 [ set pcolor blue ]
+
+  ;; =========================================================
+  ;; LA SALIDA FINAL (La "Puertita" de 2 bloques) - CORREGIDO
+  ;; =========================================================
+  
+  ;; 1. Aseguramos que la esquina inferior izquierda sea pared sólida primero.
+  ask patches with [pxcor = min-pxcor and pycor <= (min-pycor + 5)] [ set pcolor blue ]
+  ask patches with [pycor = min-pycor and pxcor <= (min-pxcor + 5)] [ set pcolor blue ]
+
+  ;; 2. ABRIMOS SOLO 2 BLOQUES
+  ;; Los colocamos en la pared izquierda, justo antes de la esquina.
+  ;; Usamos 'min-pxcor' para que esté en el borde exacto.
+  ask patch min-pxcor (min-pycor + 2) [ set pcolor black ]
+  ask patch min-pxcor (min-pycor + 3) [ set pcolor black ]
+  
+  ;; (He quitado la columna extra que había antes para dejar solo la puerta limpia)
 end]]></code>
   <widgets>
     <view x="303" wrappingAllowedX="false" y="18" frameRate="30.0" minPycor="-16" height="374" showTickCounter="true" patchSize="11.212121212121213" fontSize="10" wrappingAllowedY="false" width="732" tickCounterLabel="ticks" maxPycor="16" updateMode="0" maxPxcor="32" minPxcor="-32"></view>
@@ -683,7 +734,7 @@ end]]></code>
     <slider x="10" step="1" y="169" max="80" width="250" display="porcentaje-adultos" height="50" min="20" direction="Horizontal" default="51.0" variable="porcentaje-adultos"></slider>
     <slider x="9" step="0.5" y="224" max="3" width="250" display="factor-contagio-panico" height="50" min="0" direction="Horizontal" default="3.0" variable="factor-contagio-panico"></slider>
     <slider x="9" step="1" y="285" max="50" width="250" display="panico-inicial" height="50" min="0" direction="Horizontal" default="20.0" variable="panico-inicial"></slider>
-    <slider x="6" step="1" y="342" max="100" width="250" display="num-personas" height="50" min="10" direction="Horizontal" default="400.0" variable="num-personas"></slider>
+    <slider x="6" step="1" y="342" max="100" width="250" display="num-personas" height="50" min="10" direction="Horizontal" default="200.0" variable="num-personas"></slider>
     <plot x="1251" autoPlotX="true" yMax="10.0" autoPlotY="true" y="6" xMin="0.0" height="175" legend="false" xMax="10.0" yMin="0.0" width="230" display="Promedio">
       <setup></setup>
       <update></update>

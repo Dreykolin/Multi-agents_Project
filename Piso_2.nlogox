@@ -107,7 +107,11 @@ to setup
   ]
 
   create-objetivos 1 [
-    set shape "circle" set color red set size 2 setxy 0 14
+    set shape "circle" 
+    set color red 
+    set size 2 
+    ;; Asumiendo un mundo estandar aprox 16x16, ajusta si tu mundo es mas grande
+    setxy 30 14.5
   ]
 
   reset-ticks
@@ -489,6 +493,9 @@ to colocar-senales-estrategicas
   
   ;; === PASILLO CENTRAL ===
   crear-senal 0 -2 0 0 13
+  
+  
+    crear-senal -8 14.5 90 13 0
  ; crear-senal -4 1 45 0 13
 end
 
