@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<model version="NetLogo 7.0.2" snapToGrid="false">
+<model version="NetLogo 7.0.0" snapToGrid="false">
   <code><![CDATA[extensions [ ls ]
 
 globals [
@@ -14,22 +14,27 @@ globals [
   nivel-panico-total
 ]
 
+;; --------------------------------------------------------------------------
+;; SETUP
+;; Inicializa el sistema completo.
+;; 1. Resetea LevelSpace.
+;; 2. Carga los modelos "piso1.nlogox" y "piso2.nlogox".
+;; 3. Inicializa (setup) cada modelo hijo.
+;; 4. Calcula la población total inicial para las estadísticas.
+;; --------------------------------------------------------------------------
 to setup
   clear-all
-  ls:reset  ;; por si había modelos abiertos antes
+  ls:reset
 
-  ;; Crear una instancia interactiva de cada piso
   (ls:create-interactive-models 1 "piso1.nlogox"
     [ [id] -> set piso1 id ])
 
   (ls:create-interactive-models 1 "piso2.nlogox"
     [ [id] -> set piso2 id ])
 
-  ;; Llamar al setup de cada piso hijo
   ls:ask piso1 [ setup ]
   ls:ask piso2 [ setup ]
 
-  ;; Guardar cuántas personas habían al inicio
   let p1 (ls:report piso1 [ count turtles ])
   let p2 (ls:report piso2 [ count turtles ])
   set total-inicial (p1 + p2)
@@ -39,10 +44,41 @@ to setup
   reset-ticks
 end
 
-;; =========================================================
-;; REPORTES PARA PLOT
-;; =========================================================
+;; --------------------------------------------------------------------------
+;; GO (Ciclo Principal)
+;; Orquesta la simulación entre pisos.
+;; 1. Avanza un tick en ambos pisos.
+;; 2. Pregunta al Piso 2 si alguien salió por la escalera (recibe lista).
+;; 3. Si hay gente bajando, transfiere esa lista al Piso 1.
+;; 4. Actualiza todos los gráficos y estadísticas del monitor.
+;; --------------------------------------------------------------------------
+to go
+  ls:ask piso1 [ go ]
+  ls:ask piso2 [ go ]
 
+  let bajando [ evacuar-por-escalera ] ls:of piso2
+
+  if not empty? bajando [
+    ls:let lista-desde-arriba bajando
+    ls:ask piso1 [
+      recibir-desde-arriba lista-desde-arriba
+    ]
+  ]
+
+  actualizar-graficos
+  calcular-porcentajes
+  actualizar-evacuados
+  graficar-evacuados
+  calcular-panico
+  graficar-panico
+  tick
+end
+
+;; --------------------------------------------------------------------------
+;; ACTUALIZAR GRÁFICOS
+;; Dibuja en el plot "Personas por piso" la cantidad actual de agentes
+;; en cada nivel.
+;; --------------------------------------------------------------------------
 to actualizar-graficos
   set-current-plot "Personas por piso"
 
@@ -53,6 +89,11 @@ to actualizar-graficos
   plot (ls:report piso2 [ count turtles ])
 end
 
+;; --------------------------------------------------------------------------
+;; CALCULAR PORCENTAJES
+;; Calcula qué porcentaje de la población total actual se encuentra en
+;; cada piso.
+;; --------------------------------------------------------------------------
 to calcular-porcentajes
   let p1 (ls:report piso1 [ count turtles ])
   let p2 (ls:report piso2 [ count turtles ])
@@ -68,6 +109,11 @@ to calcular-porcentajes
   set porc-p2 (100 * p2 / total)
 end
 
+;; --------------------------------------------------------------------------
+;; ACTUALIZAR EVACUADOS
+;; Calcula el total de evacuados restando la población actual en ambos pisos
+;; de la población inicial registrada en el setup.
+;; --------------------------------------------------------------------------
 to actualizar-evacuados
   let p1 (ls:report piso1 [ count turtles ])
   let p2 (ls:report piso2 [ count turtles ])
@@ -75,6 +121,10 @@ to actualizar-evacuados
   set total-evacuados (total-inicial - (p1 + p2))
 end
 
+;; --------------------------------------------------------------------------
+;; GRAFICAR EVACUADOS
+;; Dibuja la curva acumulativa de personas que han logrado salir del edificio.
+;; --------------------------------------------------------------------------
 to graficar-evacuados
   set-current-plot "Evacuados en el tiempo"
   set-current-plot-pen "Evacuados"
@@ -82,12 +132,15 @@ to graficar-evacuados
   plot total-evacuados
 end
 
+;; --------------------------------------------------------------------------
+;; CALCULAR PÁNICO
+;; Obtiene el promedio de pánico de cada piso y calcula un promedio global
+;; ponderado según la cantidad de personas en cada nivel.
+;; --------------------------------------------------------------------------
 to calcular-panico
-  ;; cuántas personas hay en cada piso
   let p1-count (ls:report piso1 [ count pibes ])
   let p2-count (ls:report piso2 [ count pibes ])
 
-  ;; promedios de pánico por piso (inician en 0)
   let avg1 0
   let avg2 0
 
@@ -102,20 +155,15 @@ to calcular-panico
   set nivel-panico-p1 avg1
   set nivel-panico-p2 avg2
 
-  ;; promedio total ponderado por la cantidad de pibes
   if (p1-count + p2-count) > 0 [
     set nivel-panico-total ((avg1 * p1-count + avg2 * p2-count) / (p1-count + p2-count))
   ]
 end
 
-to-report personas-piso1
-  report ls:report piso1 [ count pibes ]
-end
-
-to-report personas-piso2
-  report ls:report piso2 [ count pibes ]
-end
-
+;; --------------------------------------------------------------------------
+;; GRAFICAR PÁNICO
+;; Dibuja las curvas de pánico para Piso 1, Piso 2 y el promedio total.
+;; --------------------------------------------------------------------------
 to graficar-panico
   set-current-plot "Niveles de panico"
 
@@ -129,30 +177,16 @@ to graficar-panico
   plot nivel-panico-total
 end
 
+;; --------------------------------------------------------------------------
+;; REPORTES AUXILIARES
+;; Funciones simples para monitores de interfaz.
+;; --------------------------------------------------------------------------
+to-report personas-piso1
+  report ls:report piso1 [ count pibes ]
+end
 
-to go
-  ;; 1. avanzar ambos pisos
-  ls:ask piso1 [ go ]
-  ls:ask piso2 [ go ]
-
-  ;; 2. obtener lista de personas que bajan por la escalera desde piso2
-  let bajando [ evacuar-por-escalera ] ls:of piso2
-
-  ;; 3. si hay gente bajando, mandarla a piso1
-  if not empty? bajando [
-    ;; compartimos la lista con el hijo usando ls:let
-    ls:let lista-desde-arriba bajando
-    ;; en piso1, recibir-desde-arriba puede leer lista-desde-arriba directamente
-    ls:ask piso1 [
-      recibir-desde-arriba lista-desde-arriba
-    ]
-  ]
-  actualizar-graficos
-  calcular-porcentajes
-  actualizar-evacuados
-  graficar-evacuados
-  calcular-panico
-  graficar-panico
+to-report personas-piso2
+  report ls:report piso2 [ count pibes ]
 end
 
 ]]></code>
